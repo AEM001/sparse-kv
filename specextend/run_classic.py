@@ -73,6 +73,20 @@ def main():
     )
     args = parser.parse_args()
 
+    def resolve_local_path(model_id: str) -> str:
+        """If model is cached locally, return snapshot path; otherwise return model_id."""
+        import os
+        hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+        safe_name = model_id.replace("/", "--")
+        cache_dir = os.path.join(hf_home, "hub", f"models--{safe_name}")
+        snapshots = os.path.join(cache_dir, "snapshots")
+        if os.path.isdir(snapshots):
+            for entry in os.listdir(snapshots):
+                snap = os.path.join(snapshots, entry)
+                if os.path.isdir(snap):
+                    return snap
+        return model_id
+
     base_model_map = {
         "vicuna_7b":  "lmsys/vicuna-7b-v1.5-16k",
         "longchat_7b": "lmsys/longchat-7b-16k",
@@ -82,8 +96,8 @@ def main():
         "longchat_7b": "JackFram/llama-68m",
     }
 
-    base_model_path  = base_model_map[args.model_name]
-    draft_model_path = draft_model_map[args.model_name]
+    base_model_path  = resolve_local_path(base_model_map[args.model_name])
+    draft_model_path = resolve_local_path(draft_model_map[args.model_name])
 
     texts = load_texts_from_jsonl(args.input_file, args.max_samples)
     if not texts:
@@ -95,8 +109,7 @@ def main():
         draft_model_path=draft_model_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-        device_map="auto"
-    ).eval()
+    ).eval().cuda()
     tokenizer = model.tokenizer
 
     accelerator = Accelerator()

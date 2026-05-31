@@ -58,14 +58,81 @@ SpecExtend also preserves performance on short sequences, is training-free and c
 
 ## Installation
 
+### 1. Clone & Setup Virtual Environment
+
 ```bash
 git clone https://github.com/jycha98/SpecExtend.git
-cd SpecExtend
-pip install -r requirements.txt
+cd SpecExtend/specextend
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-## Inference
-We provide inference scripts for both Vicuna 7B and LongChat 7B as target models, using classic LLMs (e.g., Vicuna 68M) as the draft model.
+### 2. Install PyTorch (CUDA 12.1)
+
+```bash
+pip install --upgrade pip
+pip install torch==2.4.0 --extra-index-url https://download.pytorch.org/whl/cu121
+```
+
+### 3. Install flash-attn (Pre-built Wheel, No Compilation)
+
+Instead of building from source, use the pre-built wheel for faster installation:
+
+```bash
+# Download pre-built wheel (flash-attn 2.6.3 + CUDA 12.1 + torch 2.4 + Python 3.12)
+wget https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.0.2/flash_attn-2.6.3%2Bcu121torch2.4-cp312-cp312-linux_x86_64.whl
+pip install flash_attn-2.6.3+cu121torch2.4-cp312-cp312-linux_x86_64.whl
+```
+
+### 4. Install Remaining Dependencies
+
+```bash
+pip install transformers==4.41.0 accelerate==0.21.0 sentencepiece==0.1.99 \
+    termcolor==3.1.0 tqdm==4.67.1 gradio==5.32.1 ninja==1.11.1.4 \
+    protobuf==3.19.0 tokenizers==0.19.1
+```
+
+### 5. Download Models
+
+Models are cached under a **data disk** (e.g. `/root/autodl-tmp/huggingface`) to avoid filling up system storage.
+
+```bash
+# Option A: Use HuggingFace mirror (no proxy needed)
+export HF_HOME=/root/autodl-tmp/huggingface
+export HF_ENDPOINT=https://hf-mirror.com
+huggingface-cli download lmsys/vicuna-7b-v1.5-16k
+huggingface-cli download double7/vicuna-68m
+
+# Option B: Use proxy acceleration
+source /etc/network_turbo
+huggingface-cli download lmsys/vicuna-7b-v1.5-16k
+huggingface-cli download double7/vicuna-68m
+```
+
+**Required models:**
+- **Target**: `lmsys/vicuna-7b-v1.5-16k` (~13.5 GB)
+- **Draft**: `double7/vicuna-68m` (~260 MB)
+
+### 6. Offline Inference
+
+Before running, set `HF_HOME` so the script loads models from the local cache (no internet required):
+
+```bash
+source .venv/bin/activate
+export HF_HOME=/root/autodl-tmp/huggingface
+```
+
+#### Baseline (without SpecExtend)
+
+```bash
+python run_classic.py \
+  --input_file data/govreport/govreport_2K.jsonl \
+  --model_name vicuna_7b \
+  --max_gen_len 256 \
+  --max_samples 1
+```
+
+#### With SpecExtend
 
 ```bash
 python run_classic.py \
@@ -74,10 +141,23 @@ python run_classic.py \
   --use_specextend \
   --verbose \
   --output_result_line \
-  --max_gen_len 256
+  --max_gen_len 256 \
+  --max_samples 1
 ```
 
+### 7. Performance Comparison (Example)
+
+On a single RTX 3090 with Vicuna 7B + Vicuna 68M, `govreport_2K` sample, generating 256 tokens:
+
+| Method | Wall-clock Time |
+|--------|-----------------|
+| Baseline (no SpecExtend) | ~15.7 s |
+| SpecExtend | ~16.3 s |
+
+> **Note:** Speculative decoding overhead can exceed gains on very short inputs. Significant speedups (up to **2.84x**) are observed on longer sequences (e.g. 16K tokens) where draft model acceptance rates are higher.
+
 ## Evaluation
+
 We also provide scripts to evaluate SpecExtend's performance on GovReport and PG-19.
 
 ```bash
@@ -90,3 +170,12 @@ python eval_classic.py \
   --max_gen_len 256 \
   --output_file eval_results_classic.json
 ```
+
+## Project Files
+
+| File | Description |
+|------|-------------|
+| `download_models_mirror.sh` | Download models via HF mirror |
+| `monitor_download.py` | Monitor download progress & detect stuck transfers |
+| `run_classic.py` | Inference script (modified for local cache paths) |
+| `classic/model_classic.py` | Model wrapper (with `local_files_only=True` for offline loading) |

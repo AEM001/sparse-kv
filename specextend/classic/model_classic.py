@@ -25,7 +25,7 @@ class SPModel(nn.Module):
         self.hidden_size = base_model.lm_head.weight.shape[-1]
         self.vocab_size = base_model.lm_head.weight.shape[0]
         self.base_model_name_or_path = base_model_name_or_path
-        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name_or_path, local_files_only=True)
         self.draft_model = draft_model
         self.draft_stable_kv=None
 
@@ -44,11 +44,11 @@ class SPModel(nn.Module):
             **kwargs,
     ):
         base_model = KVLlamaForCausalLM.from_pretrained(
-            base_model_path, **kwargs
+            base_model_path, local_files_only=True, **kwargs
         )
 
         draft_model = KVLlamaForCausalLM_retrieval.from_pretrained(
-            draft_model_path, **kwargs
+            draft_model_path, local_files_only=True, **kwargs
         )
 
         model = cls(
