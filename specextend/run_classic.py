@@ -123,10 +123,17 @@ def main():
         cache_dir = os.path.join(hf_home, "hub", f"models--{safe_name}")
         snapshots = os.path.join(cache_dir, "snapshots")
         if os.path.isdir(snapshots):
+            candidates = []
+            fallback = []
             for entry in os.listdir(snapshots):
-                snap = os.path.join(snapshots, entry)
-                if os.path.isdir(snap):
-                    return snap
+                snap = os.path.realpath(os.path.join(snapshots, entry))
+                if not os.path.isdir(snap):
+                    continue
+                target = fallback if entry == "main" else candidates
+                target.append((os.path.getmtime(snap), snap))
+            selected = candidates or fallback
+            if selected:
+                return sorted(selected, reverse=True)[0][1]
         return model_id
 
     base_model_map = {

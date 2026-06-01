@@ -77,3 +77,19 @@ For reproducible experiments, prefer putting all parameters in the JSON file and
 - The helper returns the first directory it finds under `snapshots/`. If a `main/` symlink directory exists alongside the real commit-hash snapshot, alphabetical order may pick `main/` first.
 - Transformers then loads from `snapshots/main`, which may trigger spurious `Some weights were not initialized` warnings for buffers such as `rotary_emb.inv_freq`.
 - This does not crash inference, but it clutters logs and is fragile.
+
+---
+
+## Fix Log — 2026-06-01
+
+### Fix 1: target attention mask now follows the target device
+
+Updated `specextend/shared/modeling_llama_kv_target.py` so tree attention masks are allocated on `tree_attention_mask.device` instead of the default CUDA device. The zero scalar used by `torch.where` is also created on the same device. This prevents `cuda:0`/CPU tensors from mixing with a target model placed on `cuda:1`.
+
+### Fix 2: async probe now uses KV-cache-relative positions
+
+Updated `specextend/classic/model_classic.py` so async edge probes initialize `position_ids` from the current draft KV cache length, not from `draft_position_ids[-1:]`, which carries tree-position offsets. The probe also uses a matching local `past_key_position_ids` range. This keeps probe positions and probe KV length aligned while cloud verification is running.
+
+### Fix 3: local snapshot resolution avoids stale `main`
+
+Updated `specextend/run_classic.py` so local Hugging Face snapshot resolution prefers real snapshot directories over a `main` directory/symlink and chooses the newest candidate by modification time. `main` remains a fallback only if no other snapshot directory exists.

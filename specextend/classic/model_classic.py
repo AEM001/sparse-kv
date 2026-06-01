@@ -432,11 +432,18 @@ class SPModel(nn.Module):
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(cloud_job)
             wait_t0 = time.perf_counter()
+            probe_kv_len = self.draft_stable_kv[0][0].shape[2]
+            probe_position_ids = torch.tensor([probe_kv_len], dtype=torch.long, device=self._edge_device())
+            probe_past_position_ids = torch.arange(
+                probe_kv_len,
+                dtype=torch.long,
+                device=self._edge_device(),
+            ).unsqueeze(0)
             probe_state = {
                 "input_ids": draft_input_ids[:, -1:].to(self._edge_device()),
-                "position_ids": draft_position_ids[-1:].to(self._edge_device()),
+                "position_ids": probe_position_ids,
                 "past_key_values": self.draft_stable_kv,
-                "past_key_position_ids": getattr(self.draft_model.model, "past_key_position_ids", None),
+                "past_key_position_ids": probe_past_position_ids,
             }
             while not future.done():
                 self._async_edge_draft_probe(probe_state)

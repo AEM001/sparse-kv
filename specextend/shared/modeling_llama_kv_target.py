@@ -1143,9 +1143,14 @@ class LlamaModel(LlamaPreTrainedModel):
                 # print(attention_mask.shape)
             else:
                 input_len = tree_attention_mask.size(0)
-                attention_mask=torch.zeros((input_len,past_key_values_length+input_len)).float().cuda()
+                mask_device = tree_attention_mask.device
+                attention_mask=torch.zeros(
+                    (input_len,past_key_values_length+input_len),
+                    dtype=torch.float32,
+                    device=mask_device,
+                )
                 tree_mask=torch.where(tree_attention_mask == 0, torch.finfo(torch.float32).min, tree_attention_mask)
-                tree_mask = torch.where(tree_mask == 1, torch.tensor(0,dtype=torch.float32), tree_mask)
+                tree_mask = torch.where(tree_mask == 1, torch.zeros((), dtype=torch.float32, device=mask_device), tree_mask)
                 attention_mask[-input_len:,-input_len:]=tree_mask
                 attention_mask=attention_mask[None,None,:,:]
                 # print("\nuse tree")
