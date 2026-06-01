@@ -1,0 +1,20 @@
+{
+  "cloud_ar": {
+    "avg_tokens": 256.0,
+    "avg_time_s": 10.87,
+    "avg_tok_per_sec": 23.62,
+    "avg_accept_length": 0.0
+  },
+  "edge_cloud_sync_naive": {
+    "avg_tokens": 257.0,
+    "avg_time_s": 10.57,
+    "avg_tok_per_sec": 24.34,
+    "avg_accept_length": 0.95
+  },
+  "edge_cloud_sync": {
+    "avg_tokens": 257.3,
+    "avg_time_s": 6.66,
+    "avg_tok_per_sec": 38.88,
+    "avg_accept_length": 2.13
+  }
+}

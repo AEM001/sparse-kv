@@ -126,3 +126,65 @@ Updated the edge-cloud network protocol to use cloud-selected chunk IDs instead 
 - The edge applies selected chunk IDs to update its draft working KV cache.
 
 This keeps the original SpecExtend idea that target attention guides draft block selection, but avoids modeling a large logits transfer that is not part of a realistic edge-cloud protocol.
+
+## 2026-06-01 12:55 — 4K 三种方法对比 Benchmark
+
+### 配置
+- 输入：data/govreport/govreport_4K.jsonl
+- 样本数：3 samples / condition
+- 最大生成长度：256 tokens
+- 模型：vicuna_7b (target) + vicuna_68m (draft)
+- 设备：edge=cuda:0, cloud=cuda:1
+- 网络：RTT 20ms, uplink/downlink 1000 Mbps
+
+### 三种方法
+1. `cloud_ar` — 纯云端自回归（baseline，无 draft model）
+2. `edge_cloud_sync_naive` — edge-cloud 朴素投机解码（无 retrieval，即无 SpecExtend）
+3. `edge_cloud_sync` — SpecExtend sync（含 cross-model retrieval）
+
+### 结果
+| Condition | Avg Tokens | Avg Time (s) | Avg Tok/s | Avg Accept |
+|-----------|-----------:|-------------:|----------:|-----------:|
+| cloud_ar | 256.0 | 10.87 | 23.62 | 0.00 |
+| edge_cloud_sync_naive | 257.0 | 10.57 | 24.34 | 0.95 |
+| edge_cloud_sync (SpecExtend) | 257.3 | 6.66 | 38.88 | 2.13 |
+
+### 结论
+- `cloud_ar` baseline：23.62 tok/s
+- `edge_cloud_sync_naive` 几乎没有加速（24.34 tok/s），accept length 仅 0.95，draft model 在 4K 长上下文上命中率低。
+- `edge_cloud_sync` (SpecExtend) 大幅提升至 38.88 tok/s，比 AR 快 **64.6%**，accept length 达 2.13，cross-model retrieval 在长上下文上效果显著。
+
+### 输出文件
+- `results_bench_4k_three/metrics_*.json` — 每个 condition 每个 sample 的详细 metrics
+- `results_bench_4k_three/summary.json` — 汇总统计
+- `results_bench_4k_three/bench.log` — 完整终端输出
+
+---
+
+## 代码修改记录
+
+### run_classic.py
+1. **valid_conditions** 增加 `edge_cloud_sync_naive`：
+   ```python
+   valid_conditions = {"cloud_ar", "edge_cloud_sync_naive", "edge_cloud_sync", "edge_cloud_async"}
+   ```
+2. **condition 分支逻辑**：
+   - `edge_cloud_sync_naive` → `use_specextend=False`, `async=False`
+   - `edge_cloud_sync` → `use_specextend=True`, `async=False`
+   - `edge_cloud_async` → `use_specextend=True`, `async=True`
+
+### configs/bench_4k_three.json（新增）
+- `conditions`: `["cloud_ar", "edge_cloud_sync_naive", "edge_cloud_sync"]`
+- `input_file`: `data/govreport/govreport_4K.jsonl`
+- `max_samples`: 3
+- `metrics_output`: `results_bench_4k_three/metrics.json`
+
+### 运行命令
+```bash
+cd /root/code/long-ecsd/specextend
+source .venv/bin/activate
+export HF_HOME=/root/autodl-tmp/huggingface
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+python run_classic.py configs/bench_4k_three.json
+```
+

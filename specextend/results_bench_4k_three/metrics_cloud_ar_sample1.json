@@ -1,0 +1,82 @@
+{
+  "condition": "cloud_ar",
+  "sample_index": 0,
+  "input_file": "data/govreport/govreport_4K.jsonl",
+  "model_name": "vicuna_7b",
+  "run_settings": {
+    "conditions": [
+      "cloud_ar",
+      "edge_cloud_sync_naive",
+      "edge_cloud_sync"
+    ],
+    "condition": "cloud_ar",
+    "input_file": "data/govreport/govreport_4K.jsonl",
+    "max_samples": 3,
+    "model_name": "vicuna_7b",
+    "max_gen_len": 256,
+    "use_specextend": true,
+    "verbose": false,
+    "output_result_line": true,
+    "retrieval_chunk_size": 32,
+    "retrieve_top_k": 32,
+    "retrieve_every_n_steps": 4,
+    "retrieval_verbose": false,
+    "warmup_runs": 3,
+    "long_context_oom_guard": true,
+    "long_context_threshold_tokens": 16000,
+    "edge_cloud": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": false,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "results_bench_4k_three/metrics.json"
+    }
+  },
+  "results": {
+    "condition": "cloud_ar",
+    "total_generated": 256,
+    "inference_time": 11.657964,
+    "tokens_per_sec": 21.96,
+    "avg_accept_length": 0.0,
+    "accept_length_list": [],
+    "cloud_ar": {
+      "metrics": {
+        "counters": {
+          "network_uplink_seconds": 0.010336920619010925,
+          "network_uplink_bytes": 32704.0,
+          "network_uplink_transfers": 1.0,
+          "cloud_ar_forward_seconds": 9.060315741226077,
+          "network_downlink_seconds": 2.572982285171747,
+          "network_downlink_bytes": 2048.0,
+          "network_downlink_transfers": 256.0
+        },
+        "events": []
+      },
+      "config": {
+        "edge_device": "cuda:0",
+        "cloud_device": "cuda:1",
+        "network": {
+          "rtt_ms": 20.0,
+          "uplink_mbps": 1000.0,
+          "downlink_mbps": 1000.0,
+          "enabled": true
+        },
+        "async_pipeline": {
+          "enabled": false,
+          "draft_probe_tokens": 1,
+          "poll_interval_ms": 1.0
+        },
+        "metrics_output": "results_bench_4k_three/metrics.json"
+      }
+    }
+  }
+}

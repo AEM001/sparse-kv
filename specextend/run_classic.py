@@ -268,7 +268,7 @@ def main():
         return
 
     conditions = settings.conditions or [settings.condition]
-    valid_conditions = {"cloud_ar", "edge_cloud_sync", "edge_cloud_async"}
+    valid_conditions = {"cloud_ar", "edge_cloud_sync_naive", "edge_cloud_sync", "edge_cloud_async"}
     unknown = [condition for condition in conditions if condition not in valid_conditions]
     if unknown:
         parser.error(f"Unknown condition(s): {', '.join(unknown)}. Valid: {', '.join(sorted(valid_conditions))}")
@@ -324,8 +324,15 @@ def main():
             parser.error(f"{condition} requires edge_cloud settings in the run config")
 
         print(colored(f"\n=== Condition: {condition} ===", "yellow"))
-        condition_settings.use_specextend = True
-        condition_edge_cloud.async_pipeline.enabled = condition == "edge_cloud_async"
+        if condition == "edge_cloud_sync_naive":
+            condition_settings.use_specextend = False
+            condition_edge_cloud.async_pipeline.enabled = False
+        elif condition == "edge_cloud_sync":
+            condition_settings.use_specextend = True
+            condition_edge_cloud.async_pipeline.enabled = False
+        else:  # edge_cloud_async
+            condition_settings.use_specextend = True
+            condition_edge_cloud.async_pipeline.enabled = True
 
         model = SPModel.from_pretrained(
             base_model_path=base_model_path,

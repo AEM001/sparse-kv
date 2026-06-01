@@ -1,0 +1,90 @@
+
+=== Condition: cloud_ar ===
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  7.92it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  8.97it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  8.79it/s]
+/root/code/long-ecsd/specextend/.venv/lib/python3.12/site-packages/transformers/generation/configuration_utils.py:515: UserWarning: `do_sample` is set to `False`. However, `temperature` is set to `0.9` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `temperature`. This was detected when initializing the generation config instance, which means the corresponding file may hold incorrect parameterization and should be fixed.
+  warnings.warn(
+/root/code/long-ecsd/specextend/.venv/lib/python3.12/site-packages/transformers/generation/configuration_utils.py:520: UserWarning: `do_sample` is set to `False`. However, `top_p` is set to `0.6` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_p`. This was detected when initializing the generation config instance, which means the corresponding file may hold incorrect parameterization and should be fixed.
+  warnings.warn(
+/root/code/long-ecsd/specextend/.venv/lib/python3.12/site-packages/transformers/generation/configuration_utils.py:515: UserWarning: `do_sample` is set to `False`. However, `temperature` is set to `0.9` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `temperature`.
+  warnings.warn(
+/root/code/long-ecsd/specextend/.venv/lib/python3.12/site-packages/transformers/generation/configuration_utils.py:520: UserWarning: `do_sample` is set to `False`. However, `top_p` is set to `0.6` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_p`.
+  warnings.warn(
+
+=== Sample 1/3 [cloud_ar] ===
+
+[cloud_ar] Generated 256 tokens in 11.66s. Token/sec: 21.96
+Wrote metrics to results_bench_4k_three/metrics_cloud_ar_sample1.json
+
+=== Sample 2/3 [cloud_ar] ===
+
+[cloud_ar] Generated 256 tokens in 10.48s. Token/sec: 24.42
+Wrote metrics to results_bench_4k_three/metrics_cloud_ar_sample2.json
+
+=== Sample 3/3 [cloud_ar] ===
+
+[cloud_ar] Generated 256 tokens in 10.46s. Token/sec: 24.48
+Wrote metrics to results_bench_4k_three/metrics_cloud_ar_sample3.json
+
+=== Condition: edge_cloud_sync_naive ===
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  8.63it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  9.34it/s]
+Some weights of LlamaForCausalLM were not initialized from the model checkpoint at /root/autodl-tmp/huggingface/hub/models--double7--vicuna-68m/snapshots/f35c45e548302e8edd0a31db7490b42ea2ddd109 and are newly initialized: ['model.layers.0.self_attn.rotary_emb.inv_freq', 'model.layers.1.self_attn.rotary_emb.inv_freq']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Edge-cloud mode enabled: draft on cuda:0, target on cuda:1, async=False
+Warming up GPUs for edge_cloud_sync_naive...
+Warmup complete for edge_cloud_sync_naive!
+
+=== Sample 1/3 [edge_cloud_sync_naive] ===
+
+Generated 257 tokens in 11.16s. 
+Token/sec: 23.03
+Average acceptance length: 0.849
+edge_cloud_sync_naive metrics: 257 tokens, 11.16s, 23.03 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_naive_sample1.json
+
+=== Sample 2/3 [edge_cloud_sync_naive] ===
+
+Generated 257 tokens in 10.34s. 
+Token/sec: 24.85
+Average acceptance length: 0.992
+edge_cloud_sync_naive metrics: 257 tokens, 10.34s, 24.85 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_naive_sample2.json
+
+=== Sample 3/3 [edge_cloud_sync_naive] ===
+
+Generated 257 tokens in 10.22s. 
+Token/sec: 25.14
+Average acceptance length: 1.008
+edge_cloud_sync_naive metrics: 257 tokens, 10.22s, 25.14 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_naive_sample3.json
+
+=== Condition: edge_cloud_sync ===
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  8.36it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  9.47it/s]
+Some weights of LlamaForCausalLM were not initialized from the model checkpoint at /root/autodl-tmp/huggingface/hub/models--double7--vicuna-68m/snapshots/f35c45e548302e8edd0a31db7490b42ea2ddd109 and are newly initialized: ['model.layers.0.self_attn.rotary_emb.inv_freq', 'model.layers.1.self_attn.rotary_emb.inv_freq']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Edge-cloud mode enabled: draft on cuda:0, target on cuda:1, async=False
+Warming up GPUs for edge_cloud_sync...
+Warmup complete for edge_cloud_sync!
+
+=== Sample 1/3 [edge_cloud_sync] ===
+
+Generated 258 tokens in 6.57s. 
+Token/sec: 39.29
+Average acceptance length: 2.395
+edge_cloud_sync metrics: 258 tokens, 6.57s, 39.29 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_sample1.json
+
+=== Sample 2/3 [edge_cloud_sync] ===
+
+Generated 257 tokens in 7.39s. 
+Token/sec: 34.79
+Average acceptance length: 1.705
+edge_cloud_sync metrics: 257 tokens, 7.39s, 34.79 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_sample2.json
+
+=== Sample 3/3 [edge_cloud_sync] ===
+
+Generated 257 tokens in 6.04s. 
+Token/sec: 42.57
+Average acceptance length: 2.295
+edge_cloud_sync metrics: 257 tokens, 6.04s, 42.57 tok/s
+Wrote metrics to results_bench_4k_three/metrics_edge_cloud_sync_sample3.json
