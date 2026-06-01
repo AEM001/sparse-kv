@@ -1,0 +1,158 @@
+{
+  "1K": {
+    "avg_accept_length": 3.0269999999999997,
+    "avg_tokens_per_sec": 30.015,
+    "total_generated_tokens": 773,
+    "total_inference_time (s)": 25.754,
+    "runs": 3,
+    "edge_cloud_config": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": true,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "edge_cloud_metrics.json"
+    },
+    "edge_cloud_counters": {
+      "prompt_tokens": 3044.0,
+      "network_uplink_seconds": 1.980362517759204,
+      "network_uplink_bytes": 683833.0,
+      "network_uplink_transfers": 196.0,
+      "cloud_forward_seconds": 12.777864322066307,
+      "edge_draft_seconds": 3.167632607743144,
+      "edge_draft_calls": 196.0,
+      "network_downlink_seconds": 7.02042344212532,
+      "network_downlink_bytes": 629952024.0,
+      "network_downlink_transfers": 196.0,
+      "async_edge_probe_tokens": 4205.0,
+      "async_edge_probe_seconds": 14.854539146646857,
+      "cloud_tree_decode_seconds": 12.141622990369797,
+      "async_wait_for_cloud_seconds": 19.313766717910767
+    }
+  },
+  "2K": {
+    "avg_accept_length": 2.5066666666666664,
+    "avg_tokens_per_sec": 26.519,
+    "total_generated_tokens": 771,
+    "total_inference_time (s)": 29.073,
+    "runs": 3,
+    "edge_cloud_config": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": true,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "edge_cloud_metrics.json"
+    },
+    "edge_cloud_counters": {
+      "prompt_tokens": 6123.0,
+      "network_uplink_seconds": 2.246434509754181,
+      "network_uplink_bytes": 800724.0,
+      "network_uplink_transfers": 223.0,
+      "cloud_forward_seconds": 14.658739252015948,
+      "edge_draft_seconds": 3.2822419703006744,
+      "edge_draft_calls": 223.0,
+      "network_downlink_seconds": 7.9865502920001745,
+      "network_downlink_bytes": 718080024.0,
+      "network_downlink_transfers": 223.0,
+      "async_edge_probe_tokens": 4793.0,
+      "async_edge_probe_seconds": 16.459357038140297,
+      "cloud_tree_decode_seconds": 13.326809920370579,
+      "async_wait_for_cloud_seconds": 21.5010210480541
+    }
+  },
+  "4K": {
+    "avg_accept_length": 2.088,
+    "avg_tokens_per_sec": 22.213,
+    "total_generated_tokens": 774,
+    "total_inference_time (s)": 34.845,
+    "runs": 3,
+    "edge_cloud_config": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": true,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "edge_cloud_metrics.json"
+    },
+    "edge_cloud_counters": {
+      "prompt_tokens": 12280.0,
+      "network_uplink_seconds": 2.571083579212427,
+      "network_uplink_bytes": 959324.0,
+      "network_uplink_transfers": 255.0,
+      "cloud_forward_seconds": 18.45323060825467,
+      "edge_draft_seconds": 3.633794790133834,
+      "edge_draft_calls": 255.0,
+      "network_downlink_seconds": 9.141067462041974,
+      "network_downlink_bytes": 822528024.0,
+      "network_downlink_transfers": 255.0,
+      "async_edge_probe_tokens": 5519.0,
+      "async_edge_probe_seconds": 19.35791372321546,
+      "cloud_tree_decode_seconds": 15.781960390508175,
+      "async_wait_for_cloud_seconds": 25.164816481992602
+    }
+  },
+  "8K": {
+    "avg_accept_length": 1.9803333333333333,
+    "avg_tokens_per_sec": 19.732,
+    "total_generated_tokens": 777,
+    "total_inference_time (s)": 39.377,
+    "runs": 3,
+    "edge_cloud_config": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": true,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "edge_cloud_metrics.json"
+    },
+    "edge_cloud_counters": {
+      "prompt_tokens": 24577.0,
+      "network_uplink_seconds": 2.673501743003726,
+      "network_uplink_bytes": 1091870.0,
+      "network_uplink_transfers": 265.0,
+      "cloud_forward_seconds": 22.178662702441216,
+      "edge_draft_seconds": 3.8964448384940624,
+      "edge_draft_calls": 265.0,
+      "network_downlink_seconds": 9.504797212779522,
+      "network_downlink_bytes": 855168024.0,
+      "network_downlink_transfers": 265.0,
+      "async_edge_probe_tokens": 5577.0,
+      "async_edge_probe_seconds": 20.249367805197835,
+      "cloud_tree_decode_seconds": 16.346723556518555,
+      "async_wait_for_cloud_seconds": 26.127060724422336
+    }
+  }
+}

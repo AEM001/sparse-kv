@@ -1,0 +1,166 @@
+{
+  "sample_index": 0,
+  "input_file": "data/govreport/govreport_2K.jsonl",
+  "model_name": "vicuna_7b",
+  "run_settings": {
+    "input_file": "data/govreport/govreport_2K.jsonl",
+    "max_samples": 1,
+    "model_name": "vicuna_7b",
+    "max_gen_len": 256,
+    "use_specextend": true,
+    "verbose": false,
+    "output_result_line": true,
+    "retrieval_chunk_size": 32,
+    "retrieve_top_k": 32,
+    "retrieve_every_n_steps": 4,
+    "retrieval_verbose": false,
+    "warmup_runs": 3,
+    "edge_cloud": {
+      "edge_device": "cuda:0",
+      "cloud_device": "cuda:1",
+      "network": {
+        "rtt_ms": 20.0,
+        "uplink_mbps": 1000.0,
+        "downlink_mbps": 1000.0,
+        "enabled": true
+      },
+      "async_pipeline": {
+        "enabled": true,
+        "draft_probe_tokens": 1,
+        "poll_interval_ms": 1.0
+      },
+      "metrics_output": "edge_cloud_metrics.json"
+    }
+  },
+  "results": {
+    "total_generated": 257,
+    "inference_time": 11.533458,
+    "accept_length_list": [
+      1,
+      3,
+      2,
+      3,
+      2,
+      1,
+      1,
+      3,
+      2,
+      2,
+      1,
+      1,
+      2,
+      0,
+      3,
+      2,
+      1,
+      3,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      2,
+      2,
+      0,
+      4,
+      2,
+      5,
+      3,
+      3,
+      3,
+      2,
+      4,
+      3,
+      0,
+      2,
+      3,
+      3,
+      3,
+      2,
+      5,
+      3,
+      2,
+      2,
+      2,
+      3,
+      1,
+      2,
+      1,
+      3,
+      2,
+      1,
+      1,
+      0,
+      2,
+      2,
+      2,
+      4,
+      3,
+      3,
+      1,
+      4,
+      4,
+      4,
+      3,
+      3,
+      2,
+      4,
+      2,
+      4,
+      2,
+      2
+    ],
+    "tokens_per_sec": 22.28,
+    "avg_accept_length": 2.338,
+    "edge_cloud": {
+      "config": {
+        "edge_device": "cuda:0",
+        "cloud_device": "cuda:1",
+        "network": {
+          "rtt_ms": 20.0,
+          "uplink_mbps": 1000.0,
+          "downlink_mbps": 1000.0,
+          "enabled": true
+        },
+        "async_pipeline": {
+          "enabled": true,
+          "draft_probe_tokens": 1,
+          "poll_interval_ms": 1.0
+        },
+        "metrics_output": "edge_cloud_metrics.json"
+      },
+      "metrics": {
+        "counters": {
+          "prompt_tokens": 2027.0,
+          "network_uplink_seconds": 0.7915093768388033,
+          "network_uplink_bytes": 279325.0,
+          "network_uplink_transfers": 78.0,
+          "cloud_forward_seconds": 6.42326682806015,
+          "edge_draft_seconds": 1.1699452754110098,
+          "edge_draft_calls": 78.0,
+          "network_downlink_seconds": 2.805795466527343,
+          "network_downlink_bytes": 251328008.0,
+          "network_downlink_transfers": 78.0,
+          "async_edge_probe_tokens": 1617.0,
+          "async_edge_probe_seconds": 7.137546932324767,
+          "cloud_tree_decode_seconds": 5.992915276437998,
+          "async_wait_for_cloud_seconds": 8.870395824313164
+        },
+        "events": [
+          {
+            "name": "generation_start",
+            "t": 14863456.625839105
+          },
+          {
+            "name": "generation_end",
+            "t": 14863468.160537064
+          }
+        ]
+      }
+    }
+  }
+}

@@ -120,9 +120,12 @@ def main():
     def extract_length(path):
         basename = os.path.basename(path)
         m = re.search(r'_(\d+)K\.jsonl$', basename)
-        if not m:
-            raise ValueError(f"Filename {basename} does not match '_<len>K.jsonl'")
-        return int(m.group(1))
+        if m:
+            return int(m.group(1))
+        m = re.search(r'_(\d+)\.jsonl$', basename)
+        if m:
+            return int(m.group(1))
+        raise ValueError(f"Filename {basename} does not match '_<len>K.jsonl' or '_<num>.jsonl'")
     files = sorted(files, key=extract_length)
 
     # Warmup GPUs on the first sample of the first file
