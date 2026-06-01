@@ -5,6 +5,7 @@ import json
 from accelerate import Accelerator 
 from termcolor import colored
 import argparse
+from classic.edge_cloud import EdgeCloudConfig, write_metrics
 
 def load_texts_from_jsonl(path: str, max_samples: int = None):
     """
@@ -71,6 +72,18 @@ def main():
         action="store_true",
         help="If set, print result line-by-line instead of as a block."
     )
+    parser.add_argument(
+        "--edge_cloud_config",
+        type=str,
+        default=None,
+        help="Path to an edge-cloud JSON config. Enables draft/target split, network simulation, async pipeline, and detailed metrics."
+    )
+    parser.add_argument(
+        "--metrics_output",
+        type=str,
+        default=None,
+        help="Optional path to write per-sample metrics JSON. Overrides metrics_output in the edge-cloud config."
+    )
     args = parser.parse_args()
 
     def resolve_local_path(model_id: str) -> str:
@@ -104,23 +117,41 @@ def main():
         print("No valid texts loaded; exiting.")
         return
 
+    edge_cloud_config = EdgeCloudConfig.from_file(args.edge_cloud_config) if args.edge_cloud_config else None
+    if args.metrics_output and edge_cloud_config is not None:
+        edge_cloud_config.metrics_output = args.metrics_output
+
     model = SPModel.from_pretrained(
         base_model_path=base_model_path,
         draft_model_path=draft_model_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-    ).eval().cuda()
+    ).eval()
+    if edge_cloud_config is not None:
+        model.configure_edge_cloud(edge_cloud_config)
+        print(colored(
+            f"Edge-cloud mode enabled: draft on {edge_cloud_config.edge_device}, "
+            f"target on {edge_cloud_config.cloud_device}",
+            "cyan"
+        ))
+    else:
+        model = model.cuda()
     tokenizer = model.tokenizer
 
     accelerator = Accelerator()
-    model, tokenizer = accelerator.prepare(model, tokenizer)
+    if edge_cloud_config is None:
+        model, tokenizer = accelerator.prepare(model, tokenizer)
 
     # Warmup GPUs
     print(colored(f'Warming up GPUs...', 'yellow'))
     for idx, text in enumerate(texts[:1]):
         input_ids = tokenizer.encode(
             text, return_tensors="pt", add_special_tokens=True
-        ).to(accelerator.device)
+        )
+        if edge_cloud_config is not None:
+            input_ids = input_ids.to(model._target_device())
+        else:
+            input_ids = input_ids.to(accelerator.device)
 
         for _ in range(3):
             _ = model.spgenerate(
@@ -141,7 +172,11 @@ def main():
         print(colored(f"\n=== Sample {idx+1}/{len(texts)} ===", 'yellow'))
         input_ids = tokenizer.encode(
             text, return_tensors="pt", add_special_tokens=True
-        ).to(accelerator.device)
+        )
+        if edge_cloud_config is not None:
+            input_ids = input_ids.to(model._target_device())
+        else:
+            input_ids = input_ids.to(accelerator.device)
 
         results = model.spgenerate(
             input_ids,
@@ -155,6 +190,25 @@ def main():
             retrieve_every_n_steps=4,
             retrieval_verbose=False
         )
+        if edge_cloud_config is not None:
+            print(colored(
+                f"Edge-cloud metrics: {results['total_generated']} tokens, "
+                f"{results['inference_time']:.2f}s, {results['tokens_per_sec']} tok/s",
+                "cyan"
+            ))
+            if edge_cloud_config.metrics_output:
+                payload = {
+                    "sample_index": idx,
+                    "input_file": args.input_file,
+                    "model_name": args.model_name,
+                    "results": results,
+                }
+                output_path = edge_cloud_config.metrics_output
+                if len(texts) > 1:
+                    root, ext = os.path.splitext(output_path)
+                    output_path = f"{root}_sample{idx + 1}{ext or '.json'}"
+                write_metrics(output_path, payload)
+                print(colored(f"Wrote metrics to {output_path}", "cyan"))
 
 if __name__ == "__main__":
     main()

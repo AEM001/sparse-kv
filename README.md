@@ -145,6 +145,34 @@ python run_classic.py \
   --max_samples 1
 ```
 
+#### Edge-Cloud Collaborative SpecExtend
+
+Use this mode when the draft model runs on an edge GPU and the target model runs on a cloud GPU. The runner places the draft and target models on separate devices, simulates network transfer latency/bandwidth, overlaps cloud verification with conservative edge-side async draft probes, and writes detailed timing metrics.
+
+Edit `configs/edge_cloud.json` to change:
+
+- `edge_device`: GPU for the draft model, for example `cuda:0`
+- `cloud_device`: GPU for the target model, for example `cuda:1`
+- `network.rtt_ms`: simulated round-trip time
+- `network.uplink_mbps`: edge-to-cloud bandwidth
+- `network.downlink_mbps`: cloud-to-edge bandwidth
+- `async_pipeline.enabled`: whether the edge continues drafting while cloud verification is pending
+- `async_pipeline.draft_probe_tokens`: how many speculative probe tokens the edge attempts per async polling cycle
+- `metrics_output`: JSON metrics output path
+
+```bash
+python run_classic.py \
+  --input_file data/govreport/govreport_2K.jsonl \
+  --model_name vicuna_7b \
+  --use_specextend \
+  --edge_cloud_config configs/edge_cloud.json \
+  --metrics_output edge_cloud_metrics.json \
+  --max_gen_len 256 \
+  --max_samples 1
+```
+
+The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, target/cloud forward time, target tree verification time, edge draft time, and async draft probe work.
+
 ### 7. Performance Comparison (Example)
 
 On a single RTX 3090 with Vicuna 7B + Vicuna 68M, `govreport_2K` sample, generating 256 tokens:

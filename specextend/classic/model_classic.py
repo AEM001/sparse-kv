@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
+import time
+from concurrent.futures import ThreadPoolExecutor
 from shared.modeling_llama_kv_target import LlamaForCausalLM as KVLlamaForCausalLM
 from classic.modeling_llama_kv_draft import LlamaForCausalLM as KVLlamaForCausalLM_retrieval
 from classic.utils_classic import *
+from classic.edge_cloud import EdgeCloudConfig, EdgeCloudMetrics, NetworkSimulator, synchronize_if_cuda
 from shared.kv_cache import initialize_past_key_values
 from transformers import AutoTokenizer
 from shared.opt_tree import Tree
@@ -31,6 +34,9 @@ class SPModel(nn.Module):
 
         self.full_draft_kv=None
         self.evicted = 0
+        self.edge_cloud_config = None
+        self.edge_cloud_metrics = None
+        self.network = None
 
     def get_tokenizer(self):
         return self.tokenizer
@@ -58,6 +64,34 @@ class SPModel(nn.Module):
         )
 
         return model
+
+    def configure_edge_cloud(self, config: EdgeCloudConfig):
+        self.edge_cloud_config = config
+        self.base_model.to(config.cloud_device)
+        self.draft_model.to(config.edge_device)
+        self.edge_cloud_metrics = EdgeCloudMetrics()
+        self.network = NetworkSimulator(config.network, self.edge_cloud_metrics)
+        return self
+
+    def _target_device(self):
+        return self.base_model.model.embed_tokens.weight.device
+
+    def _edge_device(self):
+        return self.draft_model.model.embed_tokens.weight.device
+
+    def _move_target_inputs(self, input_ids, attention_mask, tree_attention_mask, position_ids):
+        if self.edge_cloud_config is None:
+            return input_ids, attention_mask, tree_attention_mask, position_ids
+        device = self._target_device()
+        if input_ids is not None:
+            input_ids = input_ids.to(device)
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
+        if tree_attention_mask is not None:
+            tree_attention_mask = tree_attention_mask.to(device)
+        if position_ids is not None:
+            position_ids = position_ids.to(device)
+        return input_ids, attention_mask, tree_attention_mask, position_ids
 
     @torch.no_grad()
     def ar_generate(
@@ -182,6 +216,10 @@ class SPModel(nn.Module):
             logits_processor=None,
             retrieve_attn_scores=False
     ):
+        input_ids, attention_mask, tree_attention_mask, position_ids = self._move_target_inputs(
+            input_ids, attention_mask, tree_attention_mask, position_ids
+        )
+        target_t0 = time.perf_counter()
         with torch.inference_mode():
             outputs = self.base_model.model(
                 input_ids=input_ids,
@@ -203,6 +241,9 @@ class SPModel(nn.Module):
             if self.use_retrieval_cache:
                 if retrieve_attn_scores:
                     self.attn_scores = outputs.attentions[-1] # already returns last layer attention only
+        if self.edge_cloud_metrics is not None:
+            synchronize_if_cuda(str(self._target_device()))
+            self.edge_cloud_metrics.add("cloud_forward_seconds", time.perf_counter() - target_t0)
             
         if init:
             if logits_processor is not None:
@@ -230,6 +271,7 @@ class SPModel(nn.Module):
 
     @torch.no_grad()
     def draft(self,input_ids,nodes,threshold,max_depth):
+        draft_t0 = time.perf_counter()
         len_posi = input_ids.shape[1]-1
         ###### Initial Forward to generate top_k branches ######
         if hasattr(self, "draft_stable_kv") and self.draft_stable_kv is not None:
@@ -314,8 +356,94 @@ class SPModel(nn.Module):
 
         if self.use_retrieval_cache:
             position_ids += target_model_pos_diff
-        
+
+        if self.edge_cloud_metrics is not None:
+            synchronize_if_cuda(str(self._edge_device()))
+            self.edge_cloud_metrics.add("edge_draft_seconds", time.perf_counter() - draft_t0)
+            self.edge_cloud_metrics.incr("edge_draft_calls")
         return input_ids, position_ids, tree_output["attention_mask"], tree_output["parent_last"]
+
+    def _async_edge_draft_probe(self, probe_state):
+        if self.edge_cloud_config is None:
+            return
+        config = self.edge_cloud_config.async_pipeline
+        if not config.enabled or config.draft_probe_tokens <= 0 or self.draft_stable_kv is None:
+            return
+        saved_position_ids = getattr(self.draft_model.model, "past_key_position_ids", None)
+        probe_t0 = time.perf_counter()
+        try:
+            if probe_state.get("past_key_position_ids") is not None:
+                self.draft_model.model.past_key_position_ids = probe_state["past_key_position_ids"]
+            probe_ids = probe_state["input_ids"]
+            probe_pos = probe_state["position_ids"]
+            probe_kv = probe_state["past_key_values"]
+            for _ in range(config.draft_probe_tokens):
+                outputs = self.draft_model.model(
+                    input_ids=probe_ids,
+                    position_ids=probe_pos,
+                    past_key_values=probe_kv,
+                    return_kv=True,
+                    draft_use_flash_prefill=self.draft_use_flash_prefill
+                )
+                logits = self.draft_model.lm_head(outputs[0][:, -1])
+                probe_ids = torch.argmax(logits, dim=-1, keepdim=True)
+                probe_pos = probe_pos + 1
+                probe_kv = outputs[1]
+                self.edge_cloud_metrics.incr("async_edge_probe_tokens")
+            probe_state["input_ids"] = probe_ids.detach()
+            probe_state["position_ids"] = probe_pos.detach()
+            probe_state["past_key_values"] = probe_kv
+            probe_state["past_key_position_ids"] = getattr(self.draft_model.model, "past_key_position_ids", None)
+        finally:
+            self.draft_model.model.past_key_position_ids = saved_position_ids
+            synchronize_if_cuda(str(self._edge_device()))
+            self.edge_cloud_metrics.add("async_edge_probe_seconds", time.perf_counter() - probe_t0)
+
+    def _edge_cloud_tree_decoding(self, draft_input_ids, past_key_values, draft_position_ids, tree_attention_mask):
+        if self.edge_cloud_config is None:
+            return tree_decoding(
+                self,
+                draft_input_ids,
+                past_key_values,
+                draft_position_ids,
+                tree_attention_mask
+            )
+
+        uplink_payload = (draft_input_ids, draft_position_ids, tree_attention_mask)
+        self.network.transfer("uplink", uplink_payload)
+
+        def cloud_job():
+            verify_t0 = time.perf_counter()
+            result = tree_decoding(
+                self,
+                draft_input_ids,
+                past_key_values,
+                draft_position_ids,
+                tree_attention_mask
+            )
+            synchronize_if_cuda(str(self._target_device()))
+            self.edge_cloud_metrics.add("cloud_tree_decode_seconds", time.perf_counter() - verify_t0)
+            self.network.transfer("downlink", result[0])
+            return result
+
+        if not self.edge_cloud_config.async_pipeline.enabled:
+            return cloud_job()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(cloud_job)
+            wait_t0 = time.perf_counter()
+            probe_state = {
+                "input_ids": draft_input_ids[:, -1:].to(self._edge_device()),
+                "position_ids": draft_position_ids[-1:].to(self._edge_device()),
+                "past_key_values": self.draft_stable_kv,
+                "past_key_position_ids": getattr(self.draft_model.model, "past_key_position_ids", None),
+            }
+            while not future.done():
+                self._async_edge_draft_probe(probe_state)
+                if not future.done():
+                    time.sleep(max(self.edge_cloud_config.async_pipeline.poll_interval_ms, 0.0) / 1000.0)
+            self.edge_cloud_metrics.add("async_wait_for_cloud_seconds", time.perf_counter() - wait_t0)
+            return future.result()
 
     @torch.no_grad()
     def spgenerate(
@@ -338,6 +466,11 @@ class SPModel(nn.Module):
     ):   
         assert input_ids.shape[0] == 1, "Only support batch size 1 for now!!"
         input_len = input_ids.shape[1]
+        if self.edge_cloud_config is not None:
+            self.edge_cloud_metrics = EdgeCloudMetrics()
+            self.network = NetworkSimulator(self.edge_cloud_config.network, self.edge_cloud_metrics)
+            self.edge_cloud_metrics.event("generation_start")
+            self.edge_cloud_metrics.add("prompt_tokens", input_len)
         
         self.use_retrieval_cache = use_specextend
         self.target_use_flash_prefill = use_specextend
@@ -383,10 +516,14 @@ class SPModel(nn.Module):
         start_time = datetime.now()
         
         # Prefill target model and draft model + initial draft
+        if self.edge_cloud_config is not None:
+            self.network.transfer("uplink", input_ids)
         draft_input_ids,draft_position_ids,tree_attention_mask,last_token,parent, outputs = self(
             input_ids=input_ids, past_key_values=past_key_values,  output_orig=True, 
             nodes=nodes, threshold=threshold, max_depth=max_depth, logits_processor=logits_processor
         )
+        if self.edge_cloud_config is not None:
+            self.network.transfer("downlink", last_token)
 
         draft_input_ids=torch.cat([last_token.to(draft_input_ids.device),draft_input_ids],dim=-1)
         draft_position_ids=torch.cat([torch.tensor([draft_position_ids[0]-1],device=draft_position_ids.device), draft_position_ids],dim=-1)
@@ -399,13 +536,12 @@ class SPModel(nn.Module):
         accept_length_list = []
         while True:
             assert past_key_values[0][0].shape[2]==draft_position_ids[0]
-            logits, hidden_state_new, outputs = tree_decoding(
-                self,
-                draft_input_ids,
-                past_key_values,
-                draft_position_ids,
-                tree_attention_mask
-            )
+            logits, hidden_state_new, outputs = self._edge_cloud_tree_decoding(
+                    draft_input_ids,
+                    past_key_values,
+                    draft_position_ids,
+                    tree_attention_mask
+                )
 
             old_len = input_ids.shape[1]
 
@@ -459,6 +595,13 @@ class SPModel(nn.Module):
             'tokens_per_sec': tokens_per_sec,
             'avg_accept_length': avg_accept_length
         }
+
+        if self.edge_cloud_config is not None:
+            self.edge_cloud_metrics.event("generation_end")
+            results["edge_cloud"] = {
+                "config": self.edge_cloud_config.to_dict(),
+                "metrics": self.edge_cloud_metrics.summary(),
+            }
 
         return results
 

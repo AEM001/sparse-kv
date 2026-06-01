@@ -7,6 +7,7 @@ from tqdm import tqdm
 import torch
 from accelerate import Accelerator
 from classic.model_classic import SPModel
+from classic.edge_cloud import EdgeCloudConfig
 from termcolor import colored
 
 def load_texts_from_jsonl(path: str, max_samples: int = None):
@@ -65,6 +66,10 @@ def main():
         "--output_file", type=str, default="eval_results_classic.json",
         help="File to write aggregated results"
     )
+    parser.add_argument(
+        "--edge_cloud_config", type=str, default=None,
+        help="Path to an edge-cloud JSON config. Enables split draft/target placement, network simulation, async pipeline, and timing metrics."
+    )
     args = parser.parse_args()
 
     # Map model names to HF repo IDs
@@ -80,16 +85,30 @@ def main():
     draft_path = draft_map[args.model_name]
 
     # Load and prepare model
+    edge_cloud_config = EdgeCloudConfig.from_file(args.edge_cloud_config) if args.edge_cloud_config else None
+
+    model_kwargs = {}
+    if edge_cloud_config is None:
+        model_kwargs["device_map"] = "auto"
+
     model = SPModel.from_pretrained(
         base_model_path=base_path,
         draft_model_path=draft_path,
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
-        device_map="auto"
+        **model_kwargs,
     ).eval()
+    if edge_cloud_config is not None:
+        model.configure_edge_cloud(edge_cloud_config)
+        print(colored(
+            f"Edge-cloud mode enabled: draft on {edge_cloud_config.edge_device}, "
+            f"target on {edge_cloud_config.cloud_device}",
+            "cyan"
+        ))
     tokenizer = model.tokenizer
     accelerator = Accelerator()
-    model, tokenizer = accelerator.prepare(model, tokenizer)
+    if edge_cloud_config is None:
+        model, tokenizer = accelerator.prepare(model, tokenizer)
 
     # Gather all JSONL files in the data directory
     pattern = os.path.join(args.data_dir, "*.jsonl")
@@ -112,7 +131,11 @@ def main():
     if first_texts:
         input_ids = tokenizer.encode(
             first_texts[0], return_tensors="pt", add_special_tokens=True
-        ).to(accelerator.device)
+        )
+        if edge_cloud_config is not None:
+            input_ids = input_ids.to(model._target_device())
+        else:
+            input_ids = input_ids.to(accelerator.device)
         for _ in range(3):
             _ = model.spgenerate(
                 input_ids,
@@ -139,7 +162,11 @@ def main():
         for text in tqdm(texts, desc=f"{length}K samples", leave=False):
             input_ids = tokenizer.encode(
                 text, return_tensors="pt", add_special_tokens=True
-            ).to(accelerator.device)
+            )
+            if edge_cloud_config is not None:
+                input_ids = input_ids.to(model._target_device())
+            else:
+                input_ids = input_ids.to(accelerator.device)
             for _ in tqdm(range(args.runs_per_sample), desc="runs", leave=False):
                 res = model.spgenerate(
                     input_ids,
@@ -165,6 +192,12 @@ def main():
         avg_tokens_per_sec = round(total_generated / total_time if total_time > 0 else 0.0, 3)
         # average accepted length across runs
         avg_accept_length = sum(r['avg_accept_length'] for r in runs_data) / total_runs
+        edge_cloud_counters = {}
+        if edge_cloud_config is not None:
+            for run in runs_data:
+                counters = run.get("edge_cloud", {}).get("metrics", {}).get("counters", {})
+                for key, value in counters.items():
+                    edge_cloud_counters[key] = edge_cloud_counters.get(key, 0.0) + value
 
         results[f"{length}K"] = {
             "avg_accept_length": avg_accept_length,
@@ -173,6 +206,9 @@ def main():
             "total_inference_time (s)": total_time,
             "runs": total_runs,
         }
+        if edge_cloud_config is not None:
+            results[f"{length}K"]["edge_cloud_config"] = edge_cloud_config.to_dict()
+            results[f"{length}K"]["edge_cloud_counters"] = edge_cloud_counters
 
         # Checkpoint after each length
         with open(args.output_file, 'w') as f:
