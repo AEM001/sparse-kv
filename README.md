@@ -149,27 +149,24 @@ python run_classic.py \
 
 Use this mode when the draft model runs on an edge GPU and the target model runs on a cloud GPU. The runner places the draft and target models on separate devices, simulates network transfer latency/bandwidth, overlaps cloud verification with conservative edge-side async draft probes, and writes detailed timing metrics.
 
-Edit `configs/edge_cloud.json` to change:
+Edit `configs/edge_cloud.json` to change the whole run. This file is a command settings file, not only a network config: it contains the input file, model, generation length, SpecExtend retrieval settings, edge/cloud devices, network condition, async behavior, and metrics output path.
 
-- `edge_device`: GPU for the draft model, for example `cuda:0`
-- `cloud_device`: GPU for the target model, for example `cuda:1`
-- `network.rtt_ms`: simulated round-trip time
-- `network.uplink_mbps`: edge-to-cloud bandwidth
-- `network.downlink_mbps`: cloud-to-edge bandwidth
-- `async_pipeline.enabled`: whether the edge continues drafting while cloud verification is pending
-- `async_pipeline.draft_probe_tokens`: how many speculative probe tokens the edge attempts per async polling cycle
-- `metrics_output`: JSON metrics output path
+- `input_file`, `max_samples`, `model_name`, `max_gen_len`: workload and generation settings
+- `use_specextend`, `retrieval_chunk_size`, `retrieve_top_k`, `retrieve_every_n_steps`: SpecExtend settings
+- `edge_cloud.edge_device`: GPU for the draft model, for example `cuda:0`
+- `edge_cloud.cloud_device`: GPU for the target model, for example `cuda:1`
+- `edge_cloud.network.rtt_ms`: simulated round-trip time
+- `edge_cloud.network.uplink_mbps`: edge-to-cloud bandwidth
+- `edge_cloud.network.downlink_mbps`: cloud-to-edge bandwidth
+- `edge_cloud.async_pipeline.enabled`: whether the edge continues drafting while cloud verification is pending
+- `edge_cloud.async_pipeline.draft_probe_tokens`: how many speculative probe tokens the edge attempts per async polling cycle
+- `edge_cloud.metrics_output`: JSON metrics output path
 
 ```bash
-python run_classic.py \
-  --input_file data/govreport/govreport_2K.jsonl \
-  --model_name vicuna_7b \
-  --use_specextend \
-  --edge_cloud_config configs/edge_cloud.json \
-  --metrics_output edge_cloud_metrics.json \
-  --max_gen_len 256 \
-  --max_samples 1
+python run_classic.py configs/edge_cloud.json
 ```
+
+CLI flags still work for quick overrides, but the intended edge-cloud workflow is to edit `configs/edge_cloud.json` and run the simple command above.
 
 The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, target/cloud forward time, target tree verification time, edge draft time, and async draft probe work.
 

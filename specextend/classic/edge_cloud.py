@@ -34,6 +34,7 @@ class EdgeCloudConfig:
     def from_file(cls, path: str) -> "EdgeCloudConfig":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        data = data.get("edge_cloud", data)
         network = NetworkConfig(**data.get("network", {}))
         async_pipeline = AsyncConfig(**data.get("async_pipeline", {}))
         return cls(
@@ -46,6 +47,66 @@ class EdgeCloudConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class RunSettings:
+    input_file: str = "data/govreport/govreport_2K.jsonl"
+    max_samples: int = 1
+    model_name: str = "vicuna_7b"
+    max_gen_len: int = 256
+    use_specextend: bool = True
+    verbose: bool = False
+    output_result_line: bool = True
+    retrieval_chunk_size: int = 32
+    retrieve_top_k: int = 32
+    retrieve_every_n_steps: int = 4
+    retrieval_verbose: bool = False
+    warmup_runs: int = 3
+    edge_cloud: Optional[EdgeCloudConfig] = None
+
+    @classmethod
+    def from_file(cls, path: str) -> "RunSettings":
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        edge_data = data.get("edge_cloud")
+        if edge_data is None and ("edge_device" in data or "network" in data or "async_pipeline" in data):
+            edge_data = data
+
+        edge_cloud = None
+        if edge_data is not None:
+            network = NetworkConfig(**edge_data.get("network", {}))
+            async_pipeline = AsyncConfig(**edge_data.get("async_pipeline", {}))
+            edge_cloud = EdgeCloudConfig(
+                edge_device=edge_data.get("edge_device", "cuda:0"),
+                cloud_device=edge_data.get("cloud_device", "cuda:1"),
+                network=network,
+                async_pipeline=async_pipeline,
+                metrics_output=edge_data.get("metrics_output"),
+            )
+
+        allowed = {
+            "input_file",
+            "max_samples",
+            "model_name",
+            "max_gen_len",
+            "use_specextend",
+            "verbose",
+            "output_result_line",
+            "retrieval_chunk_size",
+            "retrieve_top_k",
+            "retrieve_every_n_steps",
+            "retrieval_verbose",
+            "warmup_runs",
+        }
+        values = {key: data[key] for key in allowed if key in data}
+        values["edge_cloud"] = edge_cloud
+        return cls(**values)
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        return data
 
 
 class EdgeCloudMetrics:

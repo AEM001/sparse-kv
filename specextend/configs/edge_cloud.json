@@ -1,16 +1,30 @@
 {
-  "edge_device": "cuda:0",
-  "cloud_device": "cuda:1",
-  "network": {
-    "enabled": true,
-    "rtt_ms": 20.0,
-    "uplink_mbps": 1000.0,
-    "downlink_mbps": 1000.0
-  },
-  "async_pipeline": {
-    "enabled": true,
-    "draft_probe_tokens": 1,
-    "poll_interval_ms": 1.0
-  },
-  "metrics_output": "edge_cloud_metrics.json"
+  "input_file": "data/govreport/govreport_2K.jsonl",
+  "max_samples": 1,
+  "model_name": "vicuna_7b",
+  "max_gen_len": 256,
+  "use_specextend": true,
+  "verbose": false,
+  "output_result_line": true,
+  "retrieval_chunk_size": 32,
+  "retrieve_top_k": 32,
+  "retrieve_every_n_steps": 4,
+  "retrieval_verbose": false,
+  "warmup_runs": 3,
+  "edge_cloud": {
+    "edge_device": "cuda:0",
+    "cloud_device": "cuda:1",
+    "network": {
+      "enabled": true,
+      "rtt_ms": 20.0,
+      "uplink_mbps": 1000.0,
+      "downlink_mbps": 1000.0
+    },
+    "async_pipeline": {
+      "enabled": true,
+      "draft_probe_tokens": 1,
+      "poll_interval_ms": 1.0
+    },
+    "metrics_output": "edge_cloud_metrics.json"
+  }
 }

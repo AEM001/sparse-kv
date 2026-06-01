@@ -5,7 +5,7 @@ import json
 from accelerate import Accelerator 
 from termcolor import colored
 import argparse
-from classic.edge_cloud import EdgeCloudConfig, write_metrics
+from classic.edge_cloud import EdgeCloudConfig, RunSettings, write_metrics
 
 def load_texts_from_jsonl(path: str, max_samples: int = None):
     """
@@ -37,24 +37,30 @@ def main():
         description="Run SpecExtend inference on a JSONL file of texts."
     )
     parser.add_argument(
+        "run_config",
+        nargs="?",
+        default=None,
+        help="Optional JSON run settings file. When set, the file supplies input, model, generation, edge-cloud, network, async, and metrics settings."
+    )
+    parser.add_argument(
         "--input_file", "-i",
-        required=True,
+        default=None,
         help="Path to input JSONL file (one JSON obj per line, with a 'text' field)."
     )
     parser.add_argument(
         "--max_samples", "-n",
-        type=int, default=1,
+        type=int, default=None,
         help="Maximum number of samples to read (default: 1)."
     )
     parser.add_argument(
         "--model_name", "-m",
         choices=["vicuna_7b", "longchat_7b"],
-        default="vicuna_7b",
+        default=None,
         help="Which base model to use (default: vicuna_7b)."
     )
     parser.add_argument(
         "--max_gen_len", "-max",
-        type=int, default=256,
+        type=int, default=None,
         help="Maximum number of tokens to generate(default: 256)."
     )
     parser.add_argument(
@@ -86,6 +92,29 @@ def main():
     )
     args = parser.parse_args()
 
+    settings = RunSettings.from_file(args.run_config) if args.run_config else RunSettings()
+    if args.input_file is not None:
+        settings.input_file = args.input_file
+    if args.max_samples is not None:
+        settings.max_samples = args.max_samples
+    if args.model_name is not None:
+        settings.model_name = args.model_name
+    if args.max_gen_len is not None:
+        settings.max_gen_len = args.max_gen_len
+    if args.use_specextend:
+        settings.use_specextend = True
+    if args.verbose:
+        settings.verbose = True
+    if args.output_result_line:
+        settings.output_result_line = True
+    if args.edge_cloud_config:
+        settings.edge_cloud = EdgeCloudConfig.from_file(args.edge_cloud_config)
+    if args.metrics_output and settings.edge_cloud is not None:
+        settings.edge_cloud.metrics_output = args.metrics_output
+
+    if not settings.input_file:
+        parser.error("input_file is required either in the run settings file or via --input_file")
+
     def resolve_local_path(model_id: str) -> str:
         """If model is cached locally, return snapshot path; otherwise return model_id."""
         import os
@@ -109,17 +138,15 @@ def main():
         "longchat_7b": "JackFram/llama-68m",
     }
 
-    base_model_path  = resolve_local_path(base_model_map[args.model_name])
-    draft_model_path = resolve_local_path(draft_model_map[args.model_name])
+    base_model_path  = resolve_local_path(base_model_map[settings.model_name])
+    draft_model_path = resolve_local_path(draft_model_map[settings.model_name])
 
-    texts = load_texts_from_jsonl(args.input_file, args.max_samples)
+    texts = load_texts_from_jsonl(settings.input_file, settings.max_samples)
     if not texts:
         print("No valid texts loaded; exiting.")
         return
 
-    edge_cloud_config = EdgeCloudConfig.from_file(args.edge_cloud_config) if args.edge_cloud_config else None
-    if args.metrics_output and edge_cloud_config is not None:
-        edge_cloud_config.metrics_output = args.metrics_output
+    edge_cloud_config = settings.edge_cloud
 
     model = SPModel.from_pretrained(
         base_model_path=base_model_path,
@@ -153,18 +180,18 @@ def main():
         else:
             input_ids = input_ids.to(accelerator.device)
 
-        for _ in range(3):
+        for _ in range(settings.warmup_runs):
             _ = model.spgenerate(
                 input_ids,
                 temperature=0,
                 max_new_tokens=5,
                 output_result_line=False,
                 verbose=False,
-                use_specextend=args.use_specextend,
-                retrieval_chunk_size=32,
-                retrieve_top_k=32,
-                retrieve_every_n_steps=4,
-                retrieval_verbose=False
+                use_specextend=settings.use_specextend,
+                retrieval_chunk_size=settings.retrieval_chunk_size,
+                retrieve_top_k=settings.retrieve_top_k,
+                retrieve_every_n_steps=settings.retrieve_every_n_steps,
+                retrieval_verbose=settings.retrieval_verbose
             )
     print(colored(f'Warmup complete!', 'yellow'))
 
@@ -181,14 +208,14 @@ def main():
         results = model.spgenerate(
             input_ids,
             temperature=0,
-            max_new_tokens=args.max_gen_len,
-            output_result_line=args.output_result_line,
-            verbose=args.verbose,
-            use_specextend=args.use_specextend,
-            retrieval_chunk_size=32,
-            retrieve_top_k=32,
-            retrieve_every_n_steps=4,
-            retrieval_verbose=False
+            max_new_tokens=settings.max_gen_len,
+            output_result_line=settings.output_result_line,
+            verbose=settings.verbose,
+            use_specextend=settings.use_specextend,
+            retrieval_chunk_size=settings.retrieval_chunk_size,
+            retrieve_top_k=settings.retrieve_top_k,
+            retrieve_every_n_steps=settings.retrieve_every_n_steps,
+            retrieval_verbose=settings.retrieval_verbose
         )
         if edge_cloud_config is not None:
             print(colored(
@@ -199,8 +226,9 @@ def main():
             if edge_cloud_config.metrics_output:
                 payload = {
                     "sample_index": idx,
-                    "input_file": args.input_file,
-                    "model_name": args.model_name,
+                    "input_file": settings.input_file,
+                    "model_name": settings.model_name,
+                    "run_settings": settings.to_dict(),
                     "results": results,
                 }
                 output_path = edge_cloud_config.metrics_output
