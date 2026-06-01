@@ -1,4 +1,9 @@
 {
+  "conditions": [
+    "cloud_ar",
+    "edge_cloud_sync",
+    "edge_cloud_async"
+  ],
   "input_file": "data/govreport/govreport_2K.jsonl",
   "max_samples": 1,
   "model_name": "vicuna_7b",
@@ -11,6 +16,8 @@
   "retrieve_every_n_steps": 4,
   "retrieval_verbose": false,
   "warmup_runs": 3,
+  "long_context_oom_guard": true,
+  "long_context_threshold_tokens": 16000,
   "edge_cloud": {
     "edge_device": "cuda:0",
     "cloud_device": "cuda:1",

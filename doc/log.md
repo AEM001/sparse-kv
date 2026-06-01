@@ -93,3 +93,21 @@ Updated `specextend/classic/model_classic.py` so async edge probes initialize `p
 ### Fix 3: local snapshot resolution avoids stale `main`
 
 Updated `specextend/run_classic.py` so local Hugging Face snapshot resolution prefers real snapshot directories over a `main` directory/symlink and chooses the newest candidate by modification time. `main` remains a fallback only if no other snapshot directory exists.
+
+---
+
+## Change Log — 2026-06-01
+
+### Three explicit edge-cloud experiment conditions
+
+Updated `specextend/run_classic.py` and `specextend/configs/edge_cloud.json` so one command settings file can run:
+
+- `cloud_ar`: pure cloud autoregressive target request, loading only the target model.
+- `edge_cloud_sync`: edge draft plus cloud target with simulated network and synchronous verification.
+- `edge_cloud_async`: edge draft plus cloud target with simulated network and async edge draft probes while waiting for cloud verification.
+
+The runner now executes conditions sequentially and clears CUDA cache between them. This avoids keeping the cloud AR target-only baseline and speculative draft/target models resident at the same time.
+
+### 16K OOM guard
+
+Added `long_context_oom_guard` and `long_context_threshold_tokens` settings. When a prompt reaches the threshold, warmup runs are skipped and async draft probes are disabled for `edge_cloud_async`, because those extra probe KV allocations are likely to cause OOM at 16K. The actual requested workload and generation length are unchanged.

@@ -147,12 +147,20 @@ python run_classic.py \
 
 #### Edge-Cloud Collaborative SpecExtend
 
-Use this mode when the draft model runs on an edge GPU and the target model runs on a cloud GPU. The runner places the draft and target models on separate devices, simulates network transfer latency/bandwidth, overlaps cloud verification with conservative edge-side async draft probes, and writes detailed timing metrics.
+Use this mode to compare three deployment conditions from one settings file:
+
+- `cloud_ar`: pure cloud autoregressive target-model request; only the target model is loaded.
+- `edge_cloud_sync`: edge draft model plus cloud target model with network simulation, no async edge probing while verification is pending.
+- `edge_cloud_async`: edge draft model plus cloud target model with network simulation and async edge-side draft probes while waiting for cloud verification.
+
+The runner executes conditions sequentially to avoid keeping unnecessary models in memory. This is important for 16K contexts, where loading cloud AR and draft/target speculative models at the same time can OOM.
 
 Edit `configs/edge_cloud.json` to change the whole run. This file is a command settings file, not only a network config: it contains the input file, model, generation length, SpecExtend retrieval settings, edge/cloud devices, network condition, async behavior, and metrics output path.
 
+- `conditions`: list of conditions to run, usually `cloud_ar`, `edge_cloud_sync`, and `edge_cloud_async`
 - `input_file`, `max_samples`, `model_name`, `max_gen_len`: workload and generation settings
 - `use_specextend`, `retrieval_chunk_size`, `retrieve_top_k`, `retrieve_every_n_steps`: SpecExtend settings
+- `long_context_oom_guard`: skips warmup and disables async probe KV growth for prompts at or above `long_context_threshold_tokens`
 - `edge_cloud.edge_device`: GPU for the draft model, for example `cuda:0`
 - `edge_cloud.cloud_device`: GPU for the target model, for example `cuda:1`
 - `edge_cloud.network.rtt_ms`: simulated round-trip time
@@ -168,7 +176,7 @@ python run_classic.py configs/edge_cloud.json
 
 CLI flags still work for quick overrides, but the intended edge-cloud workflow is to edit `configs/edge_cloud.json` and run the simple command above.
 
-The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, target/cloud forward time, target tree verification time, edge draft time, and async draft probe work.
+The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, cloud AR forward time, target tree verification time, edge draft time, and async draft probe work. Metrics are written with the condition name in the filename, for example `edge_cloud_metrics_cloud_ar.json`.
 
 ### 7. Performance Comparison (Example)
 

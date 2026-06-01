@@ -51,6 +51,8 @@ class EdgeCloudConfig:
 
 @dataclass
 class RunSettings:
+    conditions: Optional[list] = None
+    condition: str = "edge_cloud_async"
     input_file: str = "data/govreport/govreport_2K.jsonl"
     max_samples: int = 1
     model_name: str = "vicuna_7b"
@@ -63,6 +65,8 @@ class RunSettings:
     retrieve_every_n_steps: int = 4
     retrieval_verbose: bool = False
     warmup_runs: int = 3
+    long_context_oom_guard: bool = True
+    long_context_threshold_tokens: int = 16000
     edge_cloud: Optional[EdgeCloudConfig] = None
 
     @classmethod
@@ -88,6 +92,8 @@ class RunSettings:
 
         allowed = {
             "input_file",
+            "conditions",
+            "condition",
             "max_samples",
             "model_name",
             "max_gen_len",
@@ -99,6 +105,8 @@ class RunSettings:
             "retrieve_every_n_steps",
             "retrieval_verbose",
             "warmup_runs",
+            "long_context_oom_guard",
+            "long_context_threshold_tokens",
         }
         values = {key: data[key] for key in allowed if key in data}
         values["edge_cloud"] = edge_cloud
