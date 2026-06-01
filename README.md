@@ -176,7 +176,7 @@ python run_classic.py configs/edge_cloud.json
 
 CLI flags still work for quick overrides, but the intended edge-cloud workflow is to edit `configs/edge_cloud.json` and run the simple command above.
 
-The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, cloud AR forward time, target tree verification time, edge draft time, and async draft probe work. Metrics are written with the condition name in the filename, for example `edge_cloud_metrics_cloud_ar.json`.
+The metrics JSON includes generated-token throughput, acceptance lengths, simulated uplink/downlink bytes and seconds, cloud AR forward time, target tree verification time, edge draft time, and async draft probe work. Edge-cloud speculative modes use a cloud-selected chunk protocol: uplink sends the draft tree plus chunk metadata on retrieval steps, and downlink sends only accepted-token metadata plus selected chunk IDs. Metrics are written with the condition name in the filename, for example `edge_cloud_metrics_cloud_ar.json`.
 
 ### 7. Performance Comparison (Example)
 

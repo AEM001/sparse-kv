@@ -53,3 +53,27 @@ Metrics are written per condition. If `edge_cloud.metrics_output` is `edge_cloud
 - `edge_cloud_metrics_edge_cloud_async.json`
 
 For multiple samples, `_sampleN` is appended before `.json`.
+
+## Network Protocol
+
+The edge-cloud speculative modes use Protocol B: the cloud sends selected chunk IDs instead of raw attention vectors.
+
+Per speculative step:
+
+- Edge to cloud uplink:
+  - `draft_input_ids`: draft tree token IDs.
+  - `draft_position_ids`: target positions for the draft tree.
+  - `tree_attention_mask`: tree attention structure.
+  - `parent`: draft tree parent links for path verification.
+  - `chunk_metadata`: `(chunk_id, start, end)` rows, only on retrieval steps.
+- Cloud computation:
+  - Runs target tree decoding.
+  - Verifies the accepted path from target logits.
+  - On retrieval steps, takes the target model's last-layer attention for the accepted query, scores chunks by mean attention, and selects top-k chunk IDs.
+- Cloud to edge downlink:
+  - `next_token`
+  - `accept_length`
+  - accepted token IDs
+  - selected chunk IDs, only on retrieval steps
+
+The downlink intentionally does not include full target logits or full attention vectors. This matches the edge-cloud division where the cloud owns target verification and block selection, while the edge owns the draft KV cache and applies selected chunk IDs locally.

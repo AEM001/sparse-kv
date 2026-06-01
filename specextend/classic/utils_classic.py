@@ -90,8 +90,7 @@ def tree_decoding(
 
     return tree_logits, hidden_state, outputs
 
-def verify(input_ids, logits, draft_input_ids, draft_position_ids, tree_attention_mask, 
-           past_key_values_data, current_length_data, parent, model, nodes, threshold, max_depth, logits_processor):
+def compute_verification_metadata(input_ids, logits, draft_input_ids, draft_position_ids, parent, model, logits_processor):
     if logits_processor is None:
         next = torch.argmax(logits, dim=-1)
     else:
@@ -128,6 +127,7 @@ def verify(input_ids, logits, draft_input_ids, draft_position_ids, tree_attentio
     next_token = next[0][max_id].unsqueeze(0).unsqueeze(0)
     accept_length=len(best_candidate)-1
 
+    selected_chunk_ids = None
     # Compute final attention scores with newly accepted tokens, to be used for retrieval
     if model.use_retrieval_cache:
         if model.retrieval_condition:
@@ -141,6 +141,28 @@ def verify(input_ids, logits, draft_input_ids, draft_position_ids, tree_attentio
                 last_attn_scores[best_candidate_id_abs]),
                 dim=0
             )
+            if hasattr(model, "select_chunk_ids_from_attention"):
+                selected_chunk_ids = model.select_chunk_ids_from_attention(model.attn_scores_final)
+
+    return {
+        "best_candidate": best_candidate,
+        "best_candidate_id": best_candidate_id,
+        "next_token": next_token,
+        "accept_length": accept_length,
+        "selected_chunk_ids": selected_chunk_ids,
+    }
+
+
+def apply_verification_metadata(input_ids, metadata, draft_input_ids, draft_position_ids, tree_attention_mask,
+                                past_key_values_data, current_length_data, parent, model, nodes, threshold, max_depth):
+    best_candidate = metadata["best_candidate"]
+    best_candidate_id = metadata["best_candidate_id"]
+    next_token = metadata["next_token"]
+    accept_length = metadata["accept_length"]
+    if metadata.get("selected_chunk_ids") is not None:
+        model.pending_selected_chunk_ids = metadata["selected_chunk_ids"]
+        model.attn_scores_final = None
+        model.attn_scores = None
 
     start=current_length_data[0].item()-draft_input_ids.size(1)
     select_indices=torch.tensor(best_candidate_id)+start
@@ -170,6 +192,33 @@ def verify(input_ids, logits, draft_input_ids, draft_position_ids, tree_attentio
         dim=1)
 
     return input_ids, best_candidate, accept_length, next_draft, next_position_ids, next_tree_attention_mask,parent
+
+
+def verify(input_ids, logits, draft_input_ids, draft_position_ids, tree_attention_mask, 
+           past_key_values_data, current_length_data, parent, model, nodes, threshold, max_depth, logits_processor):
+    metadata = compute_verification_metadata(
+        input_ids,
+        logits,
+        draft_input_ids,
+        draft_position_ids,
+        parent,
+        model,
+        logits_processor,
+    )
+    return apply_verification_metadata(
+        input_ids,
+        metadata,
+        draft_input_ids,
+        draft_position_ids,
+        tree_attention_mask,
+        past_key_values_data,
+        current_length_data,
+        parent,
+        model,
+        nodes,
+        threshold,
+        max_depth,
+    )
 
 
 def print_newly_accepted_tokens(

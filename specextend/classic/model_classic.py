@@ -37,6 +37,7 @@ class SPModel(nn.Module):
         self.edge_cloud_config = None
         self.edge_cloud_metrics = None
         self.network = None
+        self.pending_selected_chunk_ids = None
 
     def get_tokenizer(self):
         return self.tokenizer
@@ -399,7 +400,42 @@ class SPModel(nn.Module):
             synchronize_if_cuda(str(self._edge_device()))
             self.edge_cloud_metrics.add("async_edge_probe_seconds", time.perf_counter() - probe_t0)
 
-    def _edge_cloud_tree_decoding(self, draft_input_ids, past_key_values, draft_position_ids, tree_attention_mask):
+    def select_chunk_ids_from_attention(self, attn):
+        n = len(self.chunks) if self.chunks is not None else 0
+        if n == 0:
+            raise ValueError("No chunks available for retrieval.")
+
+        chunks_tensor = torch.tensor(
+            [[start, end] for (_, start, end) in self.chunks],
+            dtype=torch.long,
+            device=attn.device
+        )
+        starts = chunks_tensor[:, 0]
+        ends = chunks_tensor[:, 1]
+        cum_attn = torch.cumsum(attn, dim=0)
+        lower = torch.where(starts > 0, cum_attn[starts - 1], torch.zeros_like(starts, dtype=attn.dtype))
+        ends_minus_one = torch.clamp(ends - 1, max=cum_attn.size(0) - 1)
+        chunk_sums = cum_attn[ends_minus_one] - lower
+        lengths = (ends - starts).float()
+        chunk_means = chunk_sums / lengths
+        k = min(self.retrieve_top_k, chunk_means.size(0))
+        selected_indices = torch.topk(chunk_means, k=k).indices
+        selected_ids = sorted(self.chunks[i][0] for i in selected_indices.tolist())
+        return selected_ids
+
+    def _protocol_b_downlink_payload(self, metadata):
+        fields = [
+            metadata["next_token"],
+            torch.tensor([metadata["accept_length"]], dtype=torch.int32),
+            torch.tensor(metadata["best_candidate"], dtype=torch.int32),
+        ]
+        selected_chunk_ids = metadata.get("selected_chunk_ids")
+        if selected_chunk_ids is not None:
+            fields.append(torch.tensor(selected_chunk_ids, dtype=torch.int32))
+        return tuple(fields)
+
+    def _edge_cloud_tree_decoding(self, input_ids, draft_input_ids, past_key_values, draft_position_ids,
+                                  tree_attention_mask, parent, logits_processor):
         if self.edge_cloud_config is None:
             return tree_decoding(
                 self,
@@ -409,22 +445,36 @@ class SPModel(nn.Module):
                 tree_attention_mask
             )
 
-        uplink_payload = (draft_input_ids, draft_position_ids, tree_attention_mask)
+        retrieval_condition = self.use_retrieval_cache and self.timestep % self.retrieve_every_n_steps == 0
+        chunk_metadata = torch.tensor(
+            [[cid, start, end] for (cid, start, end) in self.chunks],
+            dtype=torch.int32,
+        ) if retrieval_condition and self.chunks is not None else None
+        uplink_payload = (draft_input_ids, draft_position_ids, tree_attention_mask, parent, chunk_metadata)
         self.network.transfer("uplink", uplink_payload)
 
         def cloud_job():
             verify_t0 = time.perf_counter()
-            result = tree_decoding(
+            logits, hidden_state, outputs = tree_decoding(
                 self,
                 draft_input_ids,
                 past_key_values,
                 draft_position_ids,
                 tree_attention_mask
             )
+            metadata = compute_verification_metadata(
+                input_ids,
+                logits,
+                draft_input_ids,
+                draft_position_ids,
+                parent,
+                self,
+                logits_processor,
+            )
             synchronize_if_cuda(str(self._target_device()))
             self.edge_cloud_metrics.add("cloud_tree_decode_seconds", time.perf_counter() - verify_t0)
-            self.network.transfer("downlink", result[0])
-            return result
+            self.network.transfer("downlink", self._protocol_b_downlink_payload(metadata))
+            return metadata, hidden_state, outputs
 
         if not self.edge_cloud_config.async_pipeline.enabled:
             return cloud_job()
@@ -543,28 +593,47 @@ class SPModel(nn.Module):
         accept_length_list = []
         while True:
             assert past_key_values[0][0].shape[2]==draft_position_ids[0]
-            logits, hidden_state_new, outputs = self._edge_cloud_tree_decoding(
+            verification_result, hidden_state_new, outputs = self._edge_cloud_tree_decoding(
+                    input_ids,
                     draft_input_ids,
                     past_key_values,
                     draft_position_ids,
-                    tree_attention_mask
+                    tree_attention_mask,
+                    parent,
+                    logits_processor
                 )
 
             old_len = input_ids.shape[1]
 
-            input_ids, best_candidate, accept_length, draft_input_ids, draft_position_ids, tree_attention_mask, parent=verify(input_ids,
-                                                                      logits,
-                                                                      draft_input_ids,
-                                                                      draft_position_ids,
-                                                                      tree_attention_mask,
-                                                                      past_key_values_data,
-                                                                      current_length_data,
-                                                                      parent,
-                                                                      self,
-                                                                      nodes,
-                                                                      threshold,
-                                                                      max_depth,
-                                                                      logits_processor)
+            if self.edge_cloud_config is not None:
+                input_ids, best_candidate, accept_length, draft_input_ids, draft_position_ids, tree_attention_mask, parent = apply_verification_metadata(
+                    input_ids,
+                    verification_result,
+                    draft_input_ids,
+                    draft_position_ids,
+                    tree_attention_mask,
+                    past_key_values_data,
+                    current_length_data,
+                    parent,
+                    self,
+                    nodes,
+                    threshold,
+                    max_depth,
+                )
+            else:
+                input_ids, best_candidate, accept_length, draft_input_ids, draft_position_ids, tree_attention_mask, parent=verify(input_ids,
+                                                                          verification_result,
+                                                                          draft_input_ids,
+                                                                          draft_position_ids,
+                                                                          tree_attention_mask,
+                                                                          past_key_values_data,
+                                                                          current_length_data,
+                                                                          parent,
+                                                                          self,
+                                                                          nodes,
+                                                                          threshold,
+                                                                          max_depth,
+                                                                          logits_processor)
             
             accept_length_list.append(accept_length.item() if isinstance(accept_length, torch.Tensor) else int(accept_length))
 
@@ -767,37 +836,13 @@ class SPModel(nn.Module):
         
         # Only retrieve top-k upon retrieval condition
         if do_retrieval:
-            attn = self.attn_scores_final
-
-            n = len(self.chunks)
-            if n == 0:
-                raise ValueError("No chunks available for retrieval.")
-
-            chunks_tensor = torch.tensor(
-                [[start, end] for (_, start, end) in self.chunks],
-                dtype=torch.long,
-                device=attn.device
-            )
-
-            starts = chunks_tensor[:, 0]  # shape: [num_chunks]
-            ends = chunks_tensor[:, 1]    # shape: [num_chunks]
-
-            # Compute cumulative sum of attn scores for fast range-sum computation
-            cum_attn = torch.cumsum(attn, dim=0) # shape: [L]
-    
-            # For each chunk, the sum is cum_attn[ends-1] - (cum_attn[starts-1] if start>0 else 0)
-            lower = torch.where(starts > 0, cum_attn[starts - 1], torch.zeros_like(starts, dtype=attn.dtype))
-            ends_minus_one = torch.clamp(ends - 1, max=cum_attn.size(0) - 1)
-            chunk_sums = cum_attn[ends_minus_one] - lower
-
-            # Compute lengths and then means (cast lengths to float)
-            lengths = (ends - starts).float() 
-            chunk_means = chunk_sums / lengths  # shape: [num_chunks]
-            
-            k = min(top_k_chunks, chunk_means.size(0))
-            topk = torch.topk(chunk_means, k=k)
-            selected_indices = topk.indices  # indices into the list of chunks
-            selected_chunks = [self.chunks[i] for i in selected_indices.tolist()]
+            if self.pending_selected_chunk_ids is not None:
+                selected_ids = set(self.pending_selected_chunk_ids)
+                selected_chunks = [chunk for chunk in self.chunks if chunk[0] in selected_ids]
+                self.pending_selected_chunk_ids = None
+            else:
+                selected_ids = set(self.select_chunk_ids_from_attention(self.attn_scores_final))
+                selected_chunks = [chunk for chunk in self.chunks if chunk[0] in selected_ids]
 
             selected_chunks.sort(key=lambda x: x[0])
             self.selected_chunks = selected_chunks

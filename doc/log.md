@@ -111,3 +111,18 @@ The runner now executes conditions sequentially and clears CUDA cache between th
 ### 16K OOM guard
 
 Added `long_context_oom_guard` and `long_context_threshold_tokens` settings. When a prompt reaches the threshold, warmup runs are skipped and async draft probes are disabled for `edge_cloud_async`, because those extra probe KV allocations are likely to cause OOM at 16K. The actual requested workload and generation length are unchanged.
+
+---
+
+## Change Log — 2026-06-01 Protocol B
+
+### Cloud-selected chunk IDs
+
+Updated the edge-cloud network protocol to use cloud-selected chunk IDs instead of sending target logits or raw attention vectors to the edge.
+
+- Uplink now accounts for draft tree token IDs, position IDs, tree mask, parent links, and chunk metadata on retrieval steps.
+- Cloud-side verification computes the accepted path and, on retrieval steps, uses the target model's final attention scores to score chunks.
+- Downlink now accounts only for `next_token`, `accept_length`, accepted token IDs, and selected chunk IDs.
+- The edge applies selected chunk IDs to update its draft working KV cache.
+
+This keeps the original SpecExtend idea that target attention guides draft block selection, but avoids modeling a large logits transfer that is not part of a realistic edge-cloud protocol.
