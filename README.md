@@ -1,20 +1,6 @@
 <h1 align="center">
-  <img
-    src="figs/specextend_icon.png"
-    alt="SpecExtend Icon"
-    width="100"
-    style="vertical-align: middle; margin-right: 8px;"
-  />
-  SpecExtend: A Drop-in Enhancement for Speculative Decoding of Long Sequences
+  Long-context edge-cloud collaborative speculative decoding
 </h1>
-
-<p align="center">
-  <img
-    src="figs/specextend_overview.png"
-    alt="SpecExtend Overview"
-    style="width: 90%; max-width: 90%;"
-  />
-</p>
 
 
 ## Introduction
