@@ -127,7 +127,7 @@ Updated the edge-cloud network protocol to use cloud-selected chunk IDs instead 
 
 This keeps the original SpecExtend idea that target attention guides draft block selection, but avoids modeling a large logits transfer that is not part of a realistic edge-cloud protocol.
 
-## 2026-06-01 12:55 — 4K 三种方法对比 Benchmark
+## 2026-06-02 22:55 — 4K 三种方法对比 Benchmark
 
 ### 配置
 - 输入：data/govreport/govreport_4K.jsonl
